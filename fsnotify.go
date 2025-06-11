@@ -465,13 +465,13 @@ func WithBufferSize(bytes int) addOpt {
 //
 // AddWith returns an error when using an unportable operation that's not
 // supported. Use [Watcher.Support] to check for support.
-func withOps(op Op) addOpt {
+func WithOps(op Op) addOpt {
 	return func(opt *withOpts) { opt.op = op }
 }
 
 // WithNoFollow disables following symlinks, so the symlinks themselves are
 // watched.
-func withNoFollow() addOpt {
+func WithNoFollow() addOpt {
 	return func(opt *withOpts) { opt.noFollow = true }
 }
 
