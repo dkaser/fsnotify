@@ -410,6 +410,7 @@ type (
 	withOpts struct {
 		bufsize    int
 		op         Op
+		noFollow   bool
 		sendCreate bool
 	}
 )
@@ -466,6 +467,12 @@ func WithBufferSize(bytes int) addOpt {
 // supported. Use [Watcher.Support] to check for support.
 func withOps(op Op) addOpt {
 	return func(opt *withOpts) { opt.op = op }
+}
+
+// WithNoFollow disables following symlinks, so the symlinks themselves are
+// watched.
+func withNoFollow() addOpt {
+	return func(opt *withOpts) { opt.noFollow = true }
 }
 
 // "Internal" option for recursive watches on inotify.
