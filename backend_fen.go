@@ -461,8 +461,8 @@ func (w *fen) WatchList() []string {
 }
 
 func (w *fen) xSupports(op Op) bool {
-	if op.Has(xUnportableOpen) || op.Has(xUnportableRead) ||
-		op.Has(xUnportableCloseWrite) || op.Has(xUnportableCloseRead) {
+	if op.Has(UnportableOpen) || op.Has(UnportableRead) ||
+		op.Has(UnportableCloseWrite) || op.Has(UnportableCloseRead) {
 		return false
 	}
 	return true
