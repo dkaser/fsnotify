@@ -484,6 +484,10 @@ func (w *inotify) handleEvent(inEvent *unix.InotifyEvent, buf *[65536]byte, offs
 		}
 	}
 
+	if inEvent.Mask&unix.IN_ISDIR != 0 {
+		return Event{}, true
+	}
+
 	ev := w.newEvent(name, inEvent.Mask, inEvent.Cookie)
 	// Need to update watch path for recurse.
 	if watch.recurse() {
