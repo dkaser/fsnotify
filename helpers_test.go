@@ -875,7 +875,7 @@ loop:
 			for i := range c.args {
 				if c.args[i] == "nofollow" || c.args[i] == "no-follow" {
 					c.args = append(c.args[:i], c.args[i+1:]...)
-					follow = withNoFollow()
+					follow = WithNoFollow()
 					break
 				}
 			}
@@ -909,7 +909,7 @@ loop:
 			}
 			do = append(do, func() {
 				p := tmppath(tmp, c.args[0])
-				err := w.w.AddWith(p, withOps(op), follow)
+				err := w.w.AddWith(p, WithOps(op), follow)
 				if err != nil {
 					t.Fatalf("line %d: addWatch(%q): %s", c.line+1, p, err)
 				}

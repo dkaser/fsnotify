@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -44,9 +45,10 @@ type inotify struct {
 	// Ten items should be more than enough for our purpose, and a loop over
 	// such a short array is faster than a map access anyway (not that it hugely
 	// matters since we're talking about hundreds of ns at the most, but still).
-	cookies     [10]koekje
-	cookieIndex uint8
-	cookiesMu   sync.Mutex
+	cookies          [10]koekje
+	cookieIndex      uint8
+	cookiesMu        sync.Mutex
+	exclusionFilters []*regexp.Regexp
 }
 
 type (
@@ -175,6 +177,13 @@ func (w *inotify) Close() error {
 	return nil
 }
 
+func (w *inotify) SetExclusionFilters(filters ...*regexp.Regexp) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.exclusionFilters = filters
+	return nil
+}
+
 func (w *inotify) Add(name string) error { return w.AddWith(name) }
 
 func (w *inotify) AddWith(path string, opts ...addOpt) error {
@@ -241,6 +250,11 @@ func (w *inotify) AddWith(path string, opts ...addOpt) error {
 				return nil
 			}
 
+			// Skip if the path is excluded by the exclusion filters.
+			if w.isExcluded(root) {
+				return nil
+			}
+
 			// Send a Create event when adding new directory from a recursive
 			// watch; this is for "mkdir -p one/two/three". Usually all those
 			// directories will be created before we can set up watchers on the
@@ -257,6 +271,11 @@ func (w *inotify) AddWith(path string, opts ...addOpt) error {
 			}
 			return add(root, with, wf)
 		})
+	}
+
+	// If the path is excluded by the exclusion filters, don't add it.
+	if w.isExcluded(path) {
+		return nil
 	}
 
 	return add(path, with, 0)
@@ -490,9 +509,14 @@ func (w *inotify) handleEvent(inEvent *unix.InotifyEvent, buf *[65536]byte, offs
 		isDir := inEvent.Mask&unix.IN_ISDIR == unix.IN_ISDIR
 		/// New directory created: set up watch on it.
 		if isDir && ev.Has(Create) {
+			// If the path is excluded by the exclusion filters, don't add it.
+			if w.isExcluded(ev.Name) {
+				return Event{}, true
+			}
+
 			err := w.register(ev.Name, watch.flags, flagRecurse)
 			if !w.sendError(err) {
-				return ev, false
+				return ev, true
 			}
 
 			// This was a directory rename, so we need to update all the
@@ -589,4 +613,13 @@ func (w *inotify) state() {
 	for wd, ww := range w.watches.wd {
 		fmt.Fprintf(os.Stderr, "%4d: %q  watchFlags=0x%x\n", wd, ww.path, ww.watchFlags)
 	}
+}
+
+func (w *inotify) isExcluded(path string) bool {
+	for _, filter := range w.exclusionFilters {
+		if filter.MatchString(path) {
+			return true
+		}
+	}
+	return false
 }

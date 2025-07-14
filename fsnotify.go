@@ -29,6 +29,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
@@ -348,6 +349,10 @@ func (w *Watcher) WatchList() []string { return w.b.WatchList() }
 // return false for an Op starting with Unportable.
 func (w *Watcher) xSupports(op Op) bool { return w.b.xSupports(op) }
 
+func (w *Watcher) SetExclusionFilters(filters ...*regexp.Regexp) error {
+	return w.b.SetExclusionFilters(filters...)
+}
+
 func (o Op) String() string {
 	var b strings.Builder
 	if o.Has(Create) {
@@ -405,6 +410,7 @@ type (
 		WatchList() []string
 		Close() error
 		xSupports(Op) bool
+		SetExclusionFilters(...*regexp.Regexp) error
 	}
 	addOpt   func(opt *withOpts)
 	withOpts struct {
