@@ -492,7 +492,7 @@ func (w *inotify) handleEvent(inEvent *unix.InotifyEvent, buf *[65536]byte, offs
 		if isDir && ev.Has(Create) {
 			err := w.register(ev.Name, watch.flags, flagRecurse)
 			if !w.sendError(err) {
-				return Event{}, false
+				return ev, false
 			}
 
 			// This was a directory rename, so we need to update all the
