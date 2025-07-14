@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -237,46 +236,6 @@ func (w *inotify) AddWith(path string, opts ...addOpt) error {
 
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	path, recurse := recursivePath(path)
-	if recurse {
-		return filepath.WalkDir(path, func(root string, d fs.DirEntry, err error) error {
-			if err != nil {
-				return err
-			}
-			if !d.IsDir() {
-				if root == path {
-					return fmt.Errorf("fsnotify: not a directory: %q", path)
-				}
-				return nil
-			}
-
-			// Skip if the path is excluded by the exclusion filters.
-			if w.isExcluded(root) {
-				return nil
-			}
-
-			// Send a Create event when adding new directory from a recursive
-			// watch; this is for "mkdir -p one/two/three". Usually all those
-			// directories will be created before we can set up watchers on the
-			// subdirectories, so only "one" would be sent as a Create event and
-			// not "one/two" and "one/two/three" (inotifywait -r has the same
-			// problem).
-			if with.sendCreate && root != path {
-				w.sendEvent(Event{Name: root, Op: Create})
-			}
-
-			wf := flagRecurse
-			if root == path {
-				wf |= flagByUser
-			}
-			return add(root, with, wf)
-		})
-	}
-
-	// If the path is excluded by the exclusion filters, don't add it.
-	if w.isExcluded(path) {
-		return nil
-	}
 
 	return add(path, with, 0)
 }
@@ -504,44 +463,8 @@ func (w *inotify) handleEvent(inEvent *unix.InotifyEvent, buf *[65536]byte, offs
 	}
 
 	ev := w.newEvent(name, inEvent.Mask, inEvent.Cookie)
-	// Need to update watch path for recurse.
-	if watch.recurse() {
-		isDir := inEvent.Mask&unix.IN_ISDIR == unix.IN_ISDIR
-		/// New directory created: set up watch on it.
-		if isDir && ev.Has(Create) {
-			// If the path is excluded by the exclusion filters, don't add it.
-			if w.isExcluded(ev.Name) {
-				return Event{}, true
-			}
 
-			err := w.register(ev.Name, watch.flags, flagRecurse)
-			if !w.sendError(err) {
-				return ev, true
-			}
-
-			// This was a directory rename, so we need to update all the
-			// children.
-			//
-			// TODO: this is of course pretty slow; we should use a better data
-			// structure for storing all of this, e.g. store children in the
-			// watch. I have some code for this in my kqueue refactor we can use
-			// in the future. For now I'm okay with this as it's not publicly
-			// available. Correctness first, performance second.
-			if ev.renamedFrom != "" {
-				for k, ww := range w.watches.wd {
-					if k == watch.wd || ww.path == ev.Name {
-						continue
-					}
-					if strings.HasPrefix(ww.path, ev.renamedFrom) {
-						ww.path = strings.Replace(ww.path, ev.renamedFrom, ev.Name, 1)
-						w.watches.wd[k] = ww
-					}
-				}
-			}
-		}
-	}
-
-	if (inEvent.Mask&unix.IN_ISDIR != 0) && !ev.Has(Create) {
+	if ev.IsDir && !ev.Has(Create) {
 		return Event{}, true
 	}
 
@@ -578,6 +501,8 @@ func (w *inotify) newEvent(name string, mask, cookie uint32) Event {
 		e.Op |= Chmod
 	}
 
+	e.IsDir = (mask&unix.IN_ISDIR == unix.IN_ISDIR)
+
 	if cookie != 0 {
 		if mask&unix.IN_MOVED_FROM == unix.IN_MOVED_FROM {
 			w.cookiesMu.Lock()
@@ -613,13 +538,4 @@ func (w *inotify) state() {
 	for wd, ww := range w.watches.wd {
 		fmt.Fprintf(os.Stderr, "%4d: %q  watchFlags=0x%x\n", wd, ww.path, ww.watchFlags)
 	}
-}
-
-func (w *inotify) isExcluded(path string) bool {
-	for _, filter := range w.exclusionFilters {
-		if filter.MatchString(path) {
-			return true
-		}
-	}
-	return false
 }

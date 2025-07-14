@@ -29,7 +29,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 )
 
@@ -168,6 +167,8 @@ type Event struct {
 	//   Event{Op: Rename, Name: "/tmp/file"}
 	//   Event{Op: Create, Name: "/tmp/rename", RenamedFrom: "/tmp/file"}
 	renamedFrom string
+
+	IsDir bool // IsDir is true if the event is for a directory.
 }
 
 // Op describes a set of file operations.
@@ -349,10 +350,6 @@ func (w *Watcher) WatchList() []string { return w.b.WatchList() }
 // return false for an Op starting with Unportable.
 func (w *Watcher) xSupports(op Op) bool { return w.b.xSupports(op) }
 
-func (w *Watcher) SetExclusionFilters(filters ...*regexp.Regexp) error {
-	return w.b.SetExclusionFilters(filters...)
-}
-
 func (o Op) String() string {
 	var b strings.Builder
 	if o.Has(Create) {
@@ -410,7 +407,6 @@ type (
 		WatchList() []string
 		Close() error
 		xSupports(Op) bool
-		SetExclusionFilters(...*regexp.Regexp) error
 	}
 	addOpt   func(opt *withOpts)
 	withOpts struct {
@@ -486,7 +482,7 @@ func withCreate() addOpt {
 	return func(opt *withOpts) { opt.sendCreate = true }
 }
 
-var enableRecurse = true
+var enableRecurse = false
 
 // Check if this path is recursive (ends with "/..." or "\..."), and return the
 // path with the /... stripped.
