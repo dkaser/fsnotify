@@ -16,7 +16,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/fsnotify/fsnotify/internal"
+	"github.com/dkaser/fsnotify/internal"
 )
 
 func init() {
